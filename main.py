@@ -1,7 +1,8 @@
 import json
+
 import sqlalchemy
 from sqlalchemy.orm import Session
-from sqlalchemy import Select
+
 from config import DSN, echo
 from models import create_tables
 from models import Book, Publisher, Shop, Stock, Sale
@@ -9,7 +10,7 @@ from create_db import create_db
 
 engine = sqlalchemy.create_engine(url=DSN, echo=echo)
 create_tables(engine)
-create_db()
+
 
 def db_filling(session, file_path: str):
     with open(f'{file_path}', 'r') as fd:
@@ -27,21 +28,25 @@ def db_filling(session, file_path: str):
         session.commit()
 
 
-def get_sales_info(session):
-    name = input('Введите имя автора: ')
-    print(f"Продажи по издателю {name}:")
-    stmt = Select(Book.title, Shop.name, Sale.price, Sale.date_sale).where(
-        Publisher.id == Book.id_publisher,
-        Stock.id_book == Book.id,
-        Stock.id == Sale.id_stock,
-        Stock.id_shop == Shop.id,
-        Publisher.name.icontains(f'{name}'))
-    result = session.execute(stmt)
-    for row in result:
-        print(f"{row[0]:40} | {row[1]:10} | {row[2]} | {row[3]}")
+def get_sales_info(session, user_input):
+    stmt = session.query(Book.title, Shop.name, Sale.price, Sale.date_sale).\
+        select_from(Shop).\
+        join(Stock).\
+        join(Book).\
+        join(Publisher).\
+        join(Sale)
+    if user_input.isdigit():
+        stmt = stmt.filter(Publisher.id == user_input).all()
+    else:
+        stmt = stmt.filter(Publisher.name == user_input).all()
+    for row in stmt:
+        print(f"{row[0]: <40} | {row[1]: <10} | {row[2]: <8} | {row[3].strftime('%d-%m-%Y')}")
 
 
-with Session(engine) as session:
-    db_filling(session=session, file_path='tests_data.json')
-    print("Доступные имена издателей:O\u2019Reilly, Pearson, Microsoft Press, No starch press")
-    get_sales_info(session=session)
+if __name__ == '__main__':
+    with Session(engine) as session:
+        create_db()
+        db_filling(session=session, file_path='tests_data.json')
+        print("Доступные имена и id издателей:1 - O\u2019Reilly, 2 - Pearson, 3 - Microsoft Press, 4 - No starch press")
+        user_input = input('Введите имя или id автора: ')
+        get_sales_info(session=session, user_input=user_input)
